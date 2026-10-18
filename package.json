@@ -23,7 +23,7 @@
     "production:check": "node --experimental-strip-types scripts/preflight.mjs"
   },
   "dependencies": {
-    "lucide-react": "^1.31.0",
+    "lucide-react": "^1.57.0",
     "next": "16.4.2",
     "pg": "^8.23.1",
     "react": "19.2.6",
