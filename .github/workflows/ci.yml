@@ -14,7 +14,10 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm ci
+      - name: Install build dependencies with NODE_ENV=production
+        run: npm ci
+        env:
+          NODE_ENV: production
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
       - run: npm test

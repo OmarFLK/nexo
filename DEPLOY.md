@@ -1,4 +1,4 @@
-﻿# Publicação: Vercel + Render + Neon
+# Publicação: Vercel + Render + Neon
 
 A interface fica na Vercel. `/api/*` é encaminhado pelo `proxy.ts` para o Render com uma chave privada de servidor. O Render valida essa chave, a sessão, a origem e o token CSRF antes de alterar dados. O PostgreSQL fica no Neon; fotos ficam no disco persistente do Render.
 
@@ -59,7 +59,7 @@ Use `render.yaml` como Blueprint, ou configure um Web Service Node manualmente. 
 | Configuração | Valor |
 | --- | --- |
 | Node | 22.x |
-| Build | `npm ci && npm run build` |
+| Build | `npm ci --include=dev && npm run build` |
 | Start | `npm start` |
 | Health check | `/api/health` |
 | `DATABASE_URL` | Conexão Neon do papel restrito `nexo_runtime`, preferencialmente pooled |
