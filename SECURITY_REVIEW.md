@@ -1,6 +1,32 @@
 ﻿# Revisão de segurança — 18/10/2026
 
-Escopo: código do Nexo e preparo para Vercel + Render + Neon. Não é uma certificação, um pentest independente nem garantia de ausência de vulnerabilidades. Não foram fornecidos projetos/domínios/credenciais dos provedores; configurações externas ainda precisam ser aplicadas e verificadas em homologação.
+Escopo: código do Nexo e verificações controladas em `https://nexomktz.vercel.app`, com API no Render e PostgreSQL Neon. Não é uma certificação, um pentest independente nem garantia de ausência de vulnerabilidades. Os painéis privados dos provedores, backups, WAF, MFA e logs internos não foram auditados.
+
+## Verificação do ambiente publicado — 18/10/2026
+
+- 18 grupos de verificações HTTP passaram: disponibilidade sem modo de teste, CSP com nonce variável, ausência de cache em páginas e respostas privadas, redirecionamento de páginas privadas, recusa de APIs sem sessão ou com sessão forjada, recusa do acesso direto ao Render mesmo com cabeçalhos falsificados, origem estrangeira, arquivos sensíveis, tentativa de SQL injection no login, login válido, atributos do cookie, leitura autenticada, SSR, CSRF ausente/forjado, origem nula/ausente/antiga, JSON inválido/comando desconhecido/prototype pollution, caminho de foto inválido/upload falso, integridade dos registros e logout com revogação. Alguns desses itens compartilham o mesmo grupo.
+- Navegador real: login e logout, navegação nas nove telas, largura de 390 px e 1440 px, cookie de sessão inacessível a JavaScript e ausência de exceções JavaScript. Na calculadora publicada, custo de R$ 100 e lucro de R$ 50 resultaram em R$ 150 de venda e 33,33% de margem; comissão de 10% resultou em R$ 166,67. Taxas de 100% produziram erro de cenário inviável.
+- TLS 1.3 com certificados válidos observado nas conexões de teste à Vercel, Render e Neon. A conexão Neon foi feita pelo mesmo módulo de banco da aplicação, usando o papel restrito configurado; não é uma captura da conexão interna do processo Render.
+- O papel Neon testado não pode atualizar usuários, criar objetos no esquema público nem apagar auditoria. A verificação de privilégios do runtime passou sem alterar o banco.
+- Sete bundles JavaScript públicos referenciados pelo login foram examinados: não continham a chave privada do proxy, a conexão Neon testada ou hashes de senha. O source map consultado foi bloqueado com HTTP 403. Não se trata de uma varredura de todos os arquivos ou de todo o histórico do GitHub.
+- Os registros comerciais, incluindo revisão do workspace, permaneceram idênticos antes e depois das verificações HTTP. Foram criadas e encerradas somente sessões de teste; contadores de proteção e logs de segurança são efeitos esperados dos testes.
+- Testes locais: 31 testes automatizados e checagem de tipos passaram; fluxos de API e navegador executados em banco temporário. Cadastro/edição de produtos e preços, estoque, venda, devolução, compra/recebimento/custo médio, clientes, fornecedores, lançamentos/liquidação, taxas e cenários foram verificados sem gravar transações comerciais em produção. A suíte também verifica concorrência e repetição de comandos, upload privado, payload excessivo e estruturas inválidas.
+- `npm audit` não identificou vulnerabilidades conhecidas nas dependências instaladas na data da execução. Isso não exclui falhas desconhecidas ou vulnerabilidades de configuração.
+
+### Criptografia e limites observados
+
+HTTPS/TLS protege o tráfego. As senhas são armazenadas com scrypt e salt, e os tokens de sessão são guardados no banco somente como hash. Hash de senha é intencionalmente não reversível; não deve ser substituído por criptografia reversível. O código usa TLS com validação de certificado para o Neon. Segundo a documentação do provedor, os dados em repouso no Neon usam AES-256: [segurança do Neon](https://neon.com/docs/security/security-overview).
+
+Não foi adicionada uma segunda camada de criptografia ao JSONB nesta revisão: ela exigiria migração de dados, gestão independente de chaves, rotação e restauração testada. A criptografia de disco do provedor não impede a leitura por uma credencial SQL autorizada. Fotos têm acesso autenticado e armazenamento privado, mas não possuem criptografia própria da aplicação. Dados exibidos ao proprietário autenticado necessariamente chegam ao seu navegador; não podem ser ocultados desse próprio usuário por criptografia.
+
+### Pendências prioritárias
+
+1. **Senha do app:** a senha compartilhada anteriormente no chat foi aceita no login real durante o teste. Troque por uma senha exclusiva. A revisão não mudou a senha nem encerrou sessões de outros dispositivos.
+2. **Credencial administrativa Neon:** uma conexão administrativa foi compartilhada anteriormente. Se ainda não foi rotacionada, redefina a senha desse papel no Neon e atualize somente os locais de manutenção que a utilizam. Não substituir `DATABASE_URL` do runtime pela conexão administrativa. Sua rotação não foi confirmada nesta revisão.
+3. **Fotos:** o filesystem padrão do Render gratuito é temporário. Fotos podem desaparecer em reinício/redeploy; configure armazenamento durável antes de depender delas. A revisão não comprova persistência após redeploy. [Limites do Render gratuito](https://render.com/docs/free#free-web-services).
+4. **Contas e operação:** habilite MFA nos provedores, configure proteção de borda e alertas, separe previews de produção e teste a restauração de backups. Essas configurações não são verificáveis somente pelo site público. O aplicativo continua sem MFA nativo, e os limites de login podem bloquear temporariamente o proprietário quando alguém tenta abusar da conta.
+
+Resultados detalhados sem conteúdo comercial ficam localmente em `.sites-runtime/production-security-results.json`, `.sites-runtime/production-browser-results.json` e `.sites-runtime/production-storage-results.json`. Essa pasta é ignorada pelo Git; não publique arquivos de configuração ou credenciais que também ficam nela.
 
 ## Correções e proteções verificadas
 
