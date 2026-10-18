@@ -1,0 +1,35 @@
+import sharp from 'sharp';
+﻿import assert from 'node:assert/strict';
+const base=process.env.QA_URL??'http://127.0.0.1:3001';
+assert.equal(process.env.QA_ALLOW_WRITE,'1','Execute apenas no servidor isolado de teste.');
+assert.equal((await (await fetch(base+'/api/health')).json()).testMode,true,'Servidor precisa de NEXO_TEST_MODE=1.');
+let cookie='',csrf='';
+const page=await fetch(base+'/login');const csp=page.headers.get('content-security-policy');assert.match(csp,/script-src.*nonce-/);assert.ok(!csp.includes("script-src 'self' 'unsafe-inline'"));
+const secondPage=await fetch(base+'/login');assert.notEqual(secondPage.headers.get('content-security-policy'),csp);
+assert.equal((await fetch(base+'/api/workspace',{method:'DELETE'})).status,405);
+assert.equal((await fetch(base+'/api/auth/login',{method:'POST',headers:{Origin:'https://evil.example','Content-Type':'application/json'},body:'{}'})).status,403);
+
+assert.equal((await fetch(base+'/api/workspace')).status,401);assert.equal((await fetch(base+'/api/upload?key=x')).status,401);
+const loginResponse=await fetch(base+'/api/auth/login',{method:'POST',headers:{Origin:base,'Content-Type':'application/json'},body:JSON.stringify({email:process.env.QA_EMAIL,password:process.env.QA_PASSWORD})});assert.equal(loginResponse.status,200);cookie=loginResponse.headers.get('set-cookie').split(';')[0];
+const session=await (await fetch(base+'/api/auth/session',{headers:{Cookie:cookie}})).json();csrf=session.csrf;assert.equal(session.user.email,process.env.QA_EMAIL);
+assert.equal((await fetch(base+'/api/workspace',{method:'POST',headers:{Cookie:cookie,Origin:base,'Content-Type':'application/json'},body:'{}'})).status,403);
+async function request(path,body,headers={}){const r=await fetch(base+path,{method:body?'POST':'GET',headers:{Origin:base,Cookie:cookie,'X-CSRF-Token':csrf,...(body?{'Content-Type':'application/json'}:{}),...headers},body:body?JSON.stringify(body):undefined});const text=await r.text();let data;try{data=JSON.parse(text);}catch{data={error:text};}return {status:r.status,data};}
+const command=(type,payload,id=crypto.randomUUID())=>request('/api/workspace',{command:{id,type,payload}});
+assert.equal((await command('product',{name:'bad',sku:'bad',cost:1,price:1,stock:999})).status,400);
+assert.equal((await command('product',{name:'bad',sku:'bad',cost:1,price:1,components:[null]})).status,400);
+assert.equal((await command('product',{name:'bad',sku:'bad',cost:1,price:1},'../bad')).status,400);
+
+let r=await request('/api/workspace');assert.equal(r.status,200);assert.equal(r.data.store.name,'Nexo');
+assert.equal((await request('/api/workspace',{command:{}},{Origin:'https://outside.example'})).status,403);
+assert.equal((await request('/api/workspace',undefined,{'Sec-Fetch-Site':'cross-site'})).status,403);
+assert.equal((await fetch(base+'/api/accounts')).status,404);
+const product=crypto.randomUUID();r=await command('product',{name:'API test',sku:'API-'+product,cost:10000,price:20000,initial:1},product);assert.equal(r.status,200);
+const attempts=await Promise.all([command('order',{productId:product,quantity:1,price:20000,channel:'Test',paid:true,fulfilled:true}),command('order',{productId:product,quantity:1,price:20000,channel:'Test',paid:true,fulfilled:true})]);assert.deepEqual(attempts.map(r=>r.status).sort(),[200,400]);
+r=await request('/api/workspace');const order=r.data.state.orders.find(o=>o.productId===product);assert.equal(r.data.state.products.find(p=>p.id===product).stock,0);assert.equal(order.status,'Entregue');assert.equal((await command('orderStatus',{orderId:order.id,status:'Devolvido'})).status,200);
+const id=crypto.randomUUID(),payload={productId:product,kind:'in',quantity:4,reason:'API test'};assert.equal((await command('stock',payload,id)).status,200);assert.equal((await command('stock',payload,id)).status,200);assert.equal((await command('stock',{...payload,quantity:5},id)).status,400);
+r=await request('/api/workspace');assert.equal(r.data.state.products.find(p=>p.id===product).stock,5);
+const supplier=crypto.randomUUID();assert.equal((await command('supplier',{name:'API supplier'},supplier)).status,200);const purchase=crypto.randomUUID();assert.equal((await command('purchase',{productId:product,supplier,quantity:5,cost:12000,due:'2026-10-25'},purchase)).status,200);r=await command('receive',{purchaseId:purchase,quantity:5});assert.equal(r.status,200);assert.equal(r.data.state.products.find(p=>p.id===product).cost,11000);
+const png=await sharp({create:{width:2,height:2,channels:3,background:'white'}}).png().toBuffer();const upload=await fetch(base+'/api/upload',{method:'POST',headers:{Origin:base,Cookie:cookie,'X-CSRF-Token':csrf,'Content-Type':'image/png'},body:png});assert.equal(upload.status,200);const photo=await upload.json();assert.equal((await fetch(base+photo.url,{headers:{Cookie:cookie}})).status,200);assert.equal((await fetch(base+'/api/upload?key=..%2Fsecret',{headers:{Cookie:cookie}})).status,404);
+assert.equal((await fetch(base+'/api/upload',{method:'POST',headers:{Origin:base,Cookie:cookie,'X-CSRF-Token':csrf,'Content-Type':'image/png'},body:'not-an-image'})).status,400);
+assert.equal((await request('/api/auth/logout',{})).status,200);assert.equal((await request('/api/workspace')).status,401);
+console.log(JSON.stringify({status:'passed',checks:['authenticated session, CSRF and logout','single Nexo store','origin and cross-site protection','no accounts endpoint','concurrent stock','idempotency','immediate sale and return','purchase receipt and average cost','private photos and traversal rejection']}));

@@ -1,0 +1,42 @@
+{
+  "name": "nexo",
+  "version": "0.2.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0 <23"
+  },
+  "scripts": {
+    "dev": "node scripts/run-local.mjs dev",
+    "dev:lan": "node scripts/run-local.mjs dev --lan",
+    "build": "node scripts/run-local.mjs build",
+    "start": "npm run production:check && node scripts/run-local.mjs start",
+    "start:lan": "npm run production:check && node scripts/run-local.mjs start --lan",
+    "db:migrate": "node --experimental-strip-types scripts/database.mjs",
+    "test": "node --experimental-strip-types --test tests/domain.test.mjs tests/store.test.mjs tests/price-for-profit.test.mjs tests/auth.test.mjs tests/postgres.test.mjs tests/security.test.mjs",
+    "typecheck": "node scripts/typecheck.mjs",
+    "auth:create-owner": "node --experimental-strip-types scripts/create-owner.mjs",
+    "db:import-local": "node --experimental-strip-types scripts/import-local.mjs",
+    "test:api": "node --experimental-strip-types scripts/qa.mjs",
+    "test:browser": "node --experimental-strip-types scripts/qa.mjs --browser",
+    "test:proxy": "node --experimental-strip-types scripts/qa.mjs --proxy",
+    "security:release": "node scripts/prepare-release.mjs",
+    "production:check": "node --experimental-strip-types scripts/preflight.mjs"
+  },
+  "dependencies": {
+    "lucide-react": "^1.31.0",
+    "next": "16.4.2",
+    "pg": "^8.23.1",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.10",
+    "@types/node": "22.19.19",
+    "@types/pg": "^8.23.1",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  },
+  "type": "module"
+}

@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: nexo-api
+    runtime: node
+    plan: starter
+    numInstances: 1
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    disk:
+      name: nexo-fotos
+      mountPath: /var/data/nexo
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: NODE_ENV
+        value: production
+      - key: NEXO_TEST_MODE
+        value: '0'
+      - key: NEXO_DATA_DIR
+        value: /var/data/nexo
+      - key: DATABASE_URL
+        sync: false
+      - key: NEXO_APP_URL
+        sync: false
+      - key: NEXO_PROXY_SECRET
+        sync: false
