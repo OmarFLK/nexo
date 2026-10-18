@@ -1,14 +1,15 @@
 'use client';
 import {useCallback,useEffect,useRef,useState} from 'react';
-import {Boxes,Calculator,ShoppingBag,ShoppingCart,Wallet,Users,Truck,Link2,LayoutDashboard,Plus,Menu,X,Search,ArrowRight,ArrowDownToLine,Pencil,History,Check,RefreshCw,ChevronRight,Package,AlertTriangle,ArrowUpRight,LogOut} from 'lucide-react';
+import {Boxes,Calculator,ShoppingBag,ShoppingCart,Wallet,Users,Truck,Link2,LayoutDashboard,Plus,Menu,X,Search,ArrowRight,ArrowDownToLine,Pencil,History,Check,RefreshCw,ChevronRight,Package,AlertTriangle,ArrowUpRight,LogOut,NotebookPen} from 'lucide-react';
 import {available,emptyState,type State,type Product} from '../lib/domain';
 import Pricing from './pricing';
+import Notes from './notes';
 import RecordForm,{type ModalState} from './record-form';
 import type {Session} from '../server/auth';
 import {money,shortDate,Metric,Status,Empty} from './ui';
 
-type Page='overview'|'stock'|'pricing'|'sales'|'purchases'|'finance'|'customers'|'suppliers'|'integrations';
-const navigation=[{id:'overview',label:'Visão geral',icon:LayoutDashboard},{id:'stock',label:'Estoque',icon:Boxes},{id:'pricing',label:'Precificação',icon:Calculator},{id:'sales',label:'Vendas',icon:ShoppingBag},{id:'purchases',label:'Comprar',icon:ShoppingCart},{id:'finance',label:'Financeiro',icon:Wallet},{id:'customers',label:'Clientes',icon:Users},{id:'suppliers',label:'Fornecedores',icon:Truck},{id:'integrations',label:'Integrações',icon:Link2}] as const;
+type Page='overview'|'stock'|'pricing'|'sales'|'purchases'|'finance'|'customers'|'suppliers'|'integrations'|'notes';
+const navigation=[{id:'overview',label:'Visão geral',icon:LayoutDashboard},{id:'stock',label:'Estoque',icon:Boxes},{id:'pricing',label:'Precificação',icon:Calculator},{id:'sales',label:'Vendas',icon:ShoppingBag},{id:'purchases',label:'Comprar',icon:ShoppingCart},{id:'notes',label:'Notas',icon:NotebookPen},{id:'finance',label:'Financeiro',icon:Wallet},{id:'customers',label:'Clientes',icon:Users},{id:'suppliers',label:'Fornecedores',icon:Truck},{id:'integrations',label:'Integrações',icon:Link2}] as const;
 const mobileTabs=navigation.slice(0,4);
 const paidSales=(s:State)=>s.orders.filter(o=>o.paidAt&&!['Cancelado','Devolvido'].includes(o.status));
 const errorText=(e:unknown)=>e instanceof Error?e.message:'Não foi possível concluir a operação.';
@@ -58,6 +59,8 @@ export default function Workspace({session}:{session:Session}){
           <div className="inventory">{products.map(p=><article className="panel product-card" key={p.id}><div className="product-heading">{p.image&&<img src={p.image} alt=""/>}<div><h2>{p.name}</h2><p>{p.sku}{p.category?' · '+p.category:''}</p></div><button className="icon-button" aria-label={'Editar '+p.name} onClick={()=>open({type:'product',product:p})}><Pencil size={18}/></button></div><div className="product-numbers"><div><span>Disponível</span><strong className={available(p,state)===0?'negative':''}>{available(p,state)}<small> un.</small></strong></div><div><span>Custo</span><strong>{money(effectiveCost(p,state))}</strong></div><div><span>Venda</span><strong>{money(p.price)}</strong></div></div>{p.reserved>0&&<p className="reserved-note">{p.reserved} unidades reservadas para vendas pendentes.</p>}<div className="product-actions"><button className="button secondary" onClick={()=>open({type:'stock',product:p})} disabled={busy||p.components.length>0}><ArrowDownToLine size={17}/>Movimentar</button><button className="button plain" onClick={()=>open({type:'history',product:p})}><History size={18}/>Histórico</button></div></article>)}</div>
           {!products.length&&<section className="panel"><Empty title={search||stockFilter!=='all'?'Nenhum produto encontrado':'Nenhum produto cadastrado'} text={search||stockFilter!=='all'?'Tente outro filtro ou código.':'Cadastre suas peças e a quantidade que você já tem.'} action={!search&&stockFilter==='all'&&<button className="button primary" disabled={!ready} onClick={()=>open({type:'product'})}><Plus size={18}/>Adicionar produto</button>}/></section>}
         </>}
+
+        {page==='notes'&&<Notes notes={state.notes??[]} ready={ready} busy={busy} run={run}/>}
 
         {page==='pricing'&&<Pricing state={state} busy={busy} run={run}/>}
 

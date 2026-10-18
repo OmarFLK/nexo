@@ -30,6 +30,9 @@ const id=crypto.randomUUID(),payload={productId:product,kind:'in',quantity:4,rea
 r=await request('/api/workspace');assert.equal(r.data.state.products.find(p=>p.id===product).stock,5);
 const supplier=crypto.randomUUID();assert.equal((await command('supplier',{name:'API supplier'},supplier)).status,200);const purchase=crypto.randomUUID();assert.equal((await command('purchase',{productId:product,supplier,quantity:5,cost:12000,due:'2026-10-25'},purchase)).status,200);r=await command('receive',{purchaseId:purchase,quantity:5});assert.equal(r.status,200);assert.equal(r.data.state.products.find(p=>p.id===product).cost,11000);
 const customer=crypto.randomUUID();assert.equal((await command('customer',{name:'API customer',email:'customer@example.test',phone:'11999999999'},customer)).status,200);
+const note=crypto.randomUUID();assert.equal((await command('note',{title:'API note',body:'Saved text'},note)).status,200);assert.equal((await request('/api/workspace')).data.state.notes[0].body,'Saved text');
+assert.equal((await command('note',{id:note,title:'Edited',body:'Updated text'})).status,200);assert.equal((await command('note',{id:note,title:'',body:'Invalid'})).status,400);
+assert.equal((await command('deleteNote',{id:note})).status,200);assert.deepEqual((await request('/api/workspace')).data.state.notes,[]);
 const entry=crypto.randomUUID();assert.equal((await command('entry',{name:'API expense',kind:'expense',amount:1250,due:'2026-10-25'},entry)).status,200);
 r=await command('settle',{entryId:entry});assert.equal(r.status,200);assert.equal(r.data.state.entries.find(e=>e.id===entry).settled,true);assert.equal((await command('settle',{entryId:entry})).status,400);
 const rules={commission:1000,tax:500,reserve:200,payment:100,target:2000};assert.equal((await command('rules',{rules})).status,200);assert.equal((await command('scenario',{name:'API scenario',rules})).status,200);

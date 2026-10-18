@@ -50,6 +50,8 @@ export class LocalStore {
     state.purchases = this.entities('purchases', true);
     state.entries = this.entities('finance_entries', true);
     state.scenarios = this.entities('pricing_scenarios');
+    const notes=this.database.prepare("SELECT value FROM app_settings WHERE key='notes'").get() as {value:string}|undefined;
+    if(notes)state.notes=JSON.parse(notes.value);
     state.audit = this.entities('audit_log', true);
     state.applied = (this.database.prepare('SELECT id FROM commands ORDER BY rowid').all() as {id:string}[]).map(c => c.id);
     const rules = this.database.prepare("SELECT value FROM app_settings WHERE key='pricing_rules'").get() as {value:string}|undefined;
@@ -88,6 +90,7 @@ export class LocalStore {
       for (const p of changed(next.purchases,current.state.purchases).reverse()) run('INSERT INTO purchases VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET received=excluded.received,data=excluded.data',[p.id,p.productId,p.supplier,p.quantity,p.received,p.cost,JSON.stringify(p)]);
       for (const e of changed(next.entries,current.state.entries).reverse()) run('INSERT INTO finance_entries VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET settled=excluded.settled,data=excluded.data',[e.id,e.type,e.amount,Number(e.settled),e.due,JSON.stringify(e)]);
       for (const c of next.scenarios) run('INSERT OR IGNORE INTO pricing_scenarios VALUES(?,?)',[c.id,JSON.stringify(c)]);
+      run("INSERT INTO app_settings VALUES('notes',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[JSON.stringify(next.notes)]);
       run("INSERT INTO app_settings VALUES('pricing_rules',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",[JSON.stringify(next.rules)]);
       run('INSERT INTO commands VALUES(?,?,?)',[command.id,hash,new Date().toISOString()]);
       const audit=next.audit[0];run('INSERT INTO audit_log VALUES(?,?,?,?,?)',[audit.id,audit.actor,audit.date,audit.type,JSON.stringify(audit)]);

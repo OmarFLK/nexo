@@ -27,10 +27,15 @@ Antes de publicar, leia [a revisão de segurança](./SECURITY_REVIEW.md). Produ�
 - Precificação: informe custo e lucro desejado em reais; o sistema calcula o preço de venda e mostra a margem resultante. Taxas e despesas são opcionais. Usar um produto cadastrado também é opcional.
 - Vendas imediatas ou com reserva; cancelamento e devolução preservam o histórico.
 - Compras com recebimento parcial e custo médio.
+- Notas pessoais da loja: criar, editar, buscar e excluir anotações de texto, com confirmação de exclusão e acesso após login.
 - Financeiro, clientes e fornecedores; conectores de marketplace ainda não implementados.
 - Login com senha protegida, sessão com expiração, saída da conta e APIs protegidas.
 
 ## Banco e comandos
+
+Notas, produtos, estoque, valores e histórico comercial não têm expiração programada. Fechar a página, sair da conta ou publicar uma nova versão não apaga esses dados do PostgreSQL. Expiração de sessões e contadores de segurança não afeta registros comerciais. A exclusão de notas exige uma ação explícita do usuário.
+
+As notas são salvas no JSONB existente do Neon; bases antigas sem o campo `notes` são aceitas sem reinicialização. No SQLite, ficam em `app_settings`. Não há nova variável de ambiente ou migração manual para essa funcionalidade. A conservação dos dados também exige manter o banco contratado/ativo e backups independentes, com restauração testada; o aplicativo não garante armazenamento eterno nem configura backups dos provedores automaticamente.
 
 Sem `DATABASE_URL`, o desenvolvimento usa SQLite em `data/nexo.sqlite`. Com `DATABASE_URL`, o backend usa PostgreSQL. Em produção, PostgreSQL e a URL pública HTTPS são obrigatórios. Fotos usam `NEXO_DATA_DIR/uploads`, em disco persistente no Render. Dados e arquivos `.env*` são ignorados pelo Git.
 

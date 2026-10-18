@@ -51,7 +51,7 @@ export async function postgres(migrate=false) {
 }
 export async function readPostgres(database: Pick<PoolClient, 'query'>) {
   const { rows } = await database.query("SELECT revision,state FROM nexo_workspace WHERE id='nexo'");
-  return { revision: Number(rows[0].revision), state: rows[0].state as State };
+  return { revision: Number(rows[0].revision), state: {...rows[0].state,notes:rows[0].state.notes??[]} as State };
 }
 export async function executePostgres(database: Pick<PoolClient, 'query'>, command: Command, actor: string) {
   if (!command || typeof command.id !== 'string' || !command.id || command.id.length > 100 || !command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) throw new DomainError('Comando inválido.');

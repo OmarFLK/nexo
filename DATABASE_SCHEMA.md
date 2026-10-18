@@ -20,6 +20,8 @@ A migração usa advisory lock transacional para inicializações concorrentes. 
 
 ## Desenvolvimento: SQLite
 
+Anotações pessoais usam `state.notes` em `nexo_workspace` no PostgreSQL e a chave `notes` de `app_settings` no SQLite. Cada nota possui ID, título, texto e datas de criação/edição, sem campo de expiração. Comandos `note` e `deleteNote` usam as mesmas transações, idempotência, autenticação e CSRF do restante do workspace. O texto não é duplicado na auditoria. Bases antigas sem notas são lidas como uma lista vazia, sem sobrescrever produtos ou histórico. Exclusões são intencionais, por comando autenticado; não existe limpeza por idade de notas ou registros comerciais.
+
 `server/migrations/001_initial.sql` contém stores, app_settings, products, kit_components, contacts, orders, order_items, stock_movements, purchases, finance_entries, pricing_scenarios, channel_prices, cost_history, commands e audit_log. Foreign keys, CHECK, índices e triggers preservam o ledger. A migração 002 acrescenta users, sessions e login_limits.
 
 O arquivo fica em NEXO_DATA_DIR/nexo.sqlite. SQLite usa WAL, busy timeout e transações; cache é invalidado pela revisão. O bootstrap só cadastra a loja Nexo e regras zeradas, sem produtos ou vendas fictícias. A conta proprietária é provisionada por comando separado.

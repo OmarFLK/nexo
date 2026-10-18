@@ -7,9 +7,10 @@ export type Contact = { id: string; name: string; document: string; email: strin
 export type Purchase = { id: string; productId: string; supplier: string; quantity: number; cost: number; received: number; date: string; due: string };
 export type Entry = { id: string; name: string; amount: number; type: string; due: string; settled: boolean; date: string };
 export type Scenario = { id: string; name: string; rules: Rules };
-export type State = { products: Product[]; movements: Movement[]; orders: Order[]; suppliers: Contact[]; customers: Contact[]; purchases: Purchase[]; entries: Entry[]; scenarios: Scenario[]; rules: Rules; applied: string[]; audit:{id:string;type:string;date:string;actor:string;details:Record<string,unknown>}[] };
+export type Note = { id:string; title:string; body:string; createdAt:string; updatedAt:string };
+export type State = { notes:Note[]; products: Product[]; movements: Movement[]; orders: Order[]; suppliers: Contact[]; customers: Contact[]; purchases: Purchase[]; entries: Entry[]; scenarios: Scenario[]; rules: Rules; applied: string[]; audit:{id:string;type:string;date:string;actor:string;details:Record<string,unknown>}[] };
 export type Command = { id: string; type: string; payload: Record<string, unknown> };
-const commandFields:Record<string,string[]>={product:['id','name','sku','category','brand','description','cost','price','shipping','packaging','fixed','min','initial','image','components'],stock:['productId','kind','quantity','reason'],price:['productId','price','channel'],rules:['rules'],scenario:['name','rules'],order:['productId','quantity','price','rules','channel','customer','paid','fulfilled'],completeOrder:['orderId'],orderStatus:['orderId','status'],supplier:['name','document','email','phone'],customer:['name','document','email','phone'],purchase:['productId','supplier','quantity','cost','due'],receive:['purchaseId','quantity'],entry:['name','kind','amount','due'],settle:['entryId']};
+const commandFields:Record<string,string[]>={note:['id','title','body'],deleteNote:['id'],product:['id','name','sku','category','brand','description','cost','price','shipping','packaging','fixed','min','initial','image','components'],stock:['productId','kind','quantity','reason'],price:['productId','price','channel'],rules:['rules'],scenario:['name','rules'],order:['productId','quantity','price','rules','channel','customer','paid','fulfilled'],completeOrder:['orderId'],orderStatus:['orderId','status'],supplier:['name','document','email','phone'],customer:['name','document','email','phone'],purchase:['productId','supplier','quantity','cost','due'],receive:['purchaseId','quantity'],entry:['name','kind','amount','due'],settle:['entryId']};
 export function validateCommand(value:unknown):asserts value is Command{
   const command=value as Command;
   if(!command||typeof command.id!=='string'||!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(command.id)||typeof command.type!=='string'||!Object.hasOwn(commandFields,command.type)||!command.payload||typeof command.payload!=='object'||Array.isArray(command.payload))throw new DomainError('Comando inválido.');
@@ -19,7 +20,7 @@ export function validateCommand(value:unknown):asserts value is Command{
 function safeTotal(value:number){if(!Number.isSafeInteger(value))throw new DomainError('Valor total excede o limite seguro.');return value;}
 function validDate(value:unknown){const text=str(value,'Vencimento');if(!/^\d{4}-\d{2}-\d{2}$/.test(text)||!Number.isFinite(Date.parse(text+'T00:00:00Z'))||new Date(text+'T00:00:00Z').toISOString().slice(0,10)!==text)throw new DomainError('Data inválida.');return text;}
 export const defaultRules: Rules = { commission: 0, tax: 0, reserve: 0, payment: 0, target: 2000 };
-export function emptyState(): State { return { products: [], movements: [], orders: [], suppliers: [], customers: [], purchases: [], entries: [], scenarios: [], rules: { ...defaultRules }, applied: [],audit:[] }; }
+export function emptyState(): State { return { notes:[], products: [], movements: [], orders: [], suppliers: [], customers: [], purchases: [], entries: [], scenarios: [], rules: { ...defaultRules }, applied: [],audit:[] }; }
 function int(v: unknown, name: string, max = 100000000): number { if (typeof v !== 'number' || !Number.isSafeInteger(v) || v < 0 || v > max) throw new DomainError(`${name}: valor inválido.`); return v; }
 function str(v: unknown, name: string, optional = false, max = 300): string { if (v === undefined && optional) return ''; if (typeof v !== 'string' || v.length > max || (!optional && !v.trim())) throw new DomainError(`${name}: informe um valor válido.`); return v.trim(); }
 export function validateRules(v: unknown): Rules { const r = v as Rules; if (!r || typeof r !== 'object') throw new DomainError('Taxas inválidas.'); return { commission: int(r.commission, 'Comissão', 10000), tax: int(r.tax, 'Tributos', 10000), reserve: int(r.reserve, 'Reserva', 10000), payment: int(r.payment, 'Pagamento', 10000), target: int(r.target, 'Margem', 9900) }; }
@@ -47,7 +48,7 @@ export function available(p: Product, state: State): number { return p.component
 export function applyCommand(source: State, command: Command, actor: string, now = new Date().toISOString()): State {
   validateCommand(command);
   str(command.id, 'Identificador'); if (source.applied.includes(command.id)) return source;
-  const s: State = structuredClone(source); const d = command.payload;
+  const s: State = structuredClone(source); const d = command.payload;s.notes??=[];
   const find = (id: unknown) => { const p = s.products.find(x => x.id === id); if (!p) throw new DomainError('Produto não encontrado.'); return p; };
   const move = (p: Product, quantity: number, reserved: number, type: string, reason: string) => {
     if (p.components.length) throw new DomainError('Movimente os componentes do kit.');
@@ -57,6 +58,17 @@ export function applyCommand(source: State, command: Command, actor: string, now
     s.movements.unshift({ id: `${command.id}-${s.movements.length}`, productId: p.id, quantity, reserved, type, reason, actor, date: now, balance: p.stock });
   };
   switch (command.type) {
+    case 'note': {
+      const old=d.id?s.notes.find(n=>n.id===d.id):undefined;
+      if(d.id!==undefined&&!old)throw new DomainError('Nota não encontrada.');
+      if(!old&&s.notes.length>=500)throw new DomainError('Limite de 500 notas atingido.');
+      const note:Note={id:old?.id??command.id,title:str(d.title,'Título',false,120),body:str(d.body,'Anotação',false,10000),createdAt:old?.createdAt??now,updatedAt:now};
+      s.notes=[note,...s.notes.filter(n=>n.id!==note.id)];break;
+    }
+    case 'deleteNote': {
+      if(!s.notes.some(n=>n.id===d.id))throw new DomainError('Nota não encontrada.');
+      s.notes=s.notes.filter(n=>n.id!==d.id);break;
+    }
     case 'product': {
       if(d.components!==undefined&&!Array.isArray(d.components))throw new DomainError('Composição de kit inválida.');
       const old = d.id ? find(d.id) : null;
@@ -139,7 +151,7 @@ export function applyCommand(source: State, command: Command, actor: string, now
     case 'settle': { const e = s.entries.find(x => x.id === d.entryId); if (!e) throw new DomainError('Lançamento não encontrado.'); if (e.settled) throw new DomainError('Lançamento já liquidado.'); e.settled = true; break; }
     default: throw new DomainError('Operação desconhecida.');
   }
-  const details = Object.fromEntries(Object.entries(d).filter(([key])=>!['image','description'].includes(key)));
+  const details = command.type==='note'||command.type==='deleteNote'?{id:d.id??command.id}:Object.fromEntries(Object.entries(d).filter(([key])=>!['image','description'].includes(key)));
   s.audit??=[];s.audit.unshift({id:command.id,type:command.type,date:now,actor,details});
   for (const p of s.products) {
     const previous=source.products.find(x=>x.id===p.id);p.costHistory??=[];

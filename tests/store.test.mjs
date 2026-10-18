@@ -11,6 +11,18 @@ function fixture(t){const folder=mkdtempSync(join(root,'sqlite-test-'));const fi
 const operation=(type,payload,id=crypto.randomUUID())=>({id,type,payload});
 function seed(store,quantity=20){const c=operation('product',{name:'Test product',sku:'TEST-1',cost:10000,price:20000,initial:quantity});store.execute(c);return c.id;}
 
+test('notas persistem entre conexões, editam e excluem sem guardar o texto na auditoria',t=>{
+  const {store,filename}=fixture(t);const note=operation('note',{title:'Lembrete',body:'Primeira linha\nSegunda linha'});
+  store.execute(note);const second=new LocalStore(filename);try{
+  assert.equal(second.read().state.notes[0].body,note.payload.body);
+  store.execute(operation('note',{id:note.id,title:'Atualizada',body:'Texto revisado'}));assert.equal(second.read().state.notes[0].title,'Atualizada');
+  assert.equal(JSON.stringify(second.read().state.audit).includes('Texto revisado'),false);
+  const revision=second.read().revision;assert.throws(()=>store.execute(operation('note',{id:note.id,title:'',body:'x'})));assert.throws(()=>store.execute(operation('note',{title:'x',body:'x'.repeat(10001)})));assert.equal(second.read().revision,revision);
+  const remove=operation('deleteNote',{id:note.id});store.execute(remove);store.execute(remove);assert.deepEqual(second.read().state.notes,[]);
+  assert.throws(()=>store.execute(operation('note',{id:note.id,title:'x',body:'x'})),/não encontrada/);
+  }finally{second.close();}
+});
+
 test('banco inicia somente com a loja Nexo e nenhum dado comercial',t=>{const {store}=fixture(t);const {state,revision}=store.read();assert.equal(revision,0);for(const key of ['products','orders','movements','entries','purchases','customers','suppliers'])assert.equal(state[key].length,0);assert.equal(state.rules.tax,0);assert.deepEqual({...store.database.prepare('SELECT * FROM stores').get()},{id:'nexo',name:'Nexo'});assert.throws(()=>store.database.prepare("INSERT INTO stores VALUES('other','Other')").run(),/CHECK/);});
 test('persistência após reabrir, ledger e restrições do banco',t=>{const {store,filename}=fixture(t);const id=seed(store);const second=new LocalStore(filename);assert.equal(second.read().state.products[0].stock,20);store.execute(operation('stock',{productId:id,kind:'in',quantity:5,reason:'Test receipt'}));assert.equal(second.read().state.products[0].stock,25);assert.equal(store.database.prepare('SELECT SUM(quantity_delta) AS total FROM stock_movements').get().total,25);assert.throws(()=>store.database.prepare('UPDATE stock_movements SET balance=0').run(),/imutáveis/);assert.throws(()=>store.database.prepare('UPDATE products SET stock=-1').run(),/CHECK/);second.close();});
 test('idempotência persistida e rejeição de mesma chave com conteúdo diferente',t=>{const {store}=fixture(t);const id=seed(store);const c=operation('stock',{productId:id,kind:'in',quantity:2,reason:'Test receipt'});const first=store.execute(c);const second=store.execute(c);assert.equal(first.revision,second.revision);assert.equal(second.state.products[0].stock,22);assert.throws(()=>store.execute({...c,payload:{...c.payload,quantity:3}}),/outra operação/);assert.equal(store.read().state.products[0].stock,22);});

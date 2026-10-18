@@ -6,6 +6,20 @@ import {readFile} from 'node:fs/promises';
 import {LocalStore} from '../server/store.ts';
 import {importLocal} from '../server/import-local.ts';
 import {dummyPasswordHash} from '../server/password.ts';
+
+test('PostgreSQL notes support existing snapshots, validation, edit, replay and deletion',async()=>{
+  const engine=new PGlite();const db={query:async(sql,args)=>{if(!args&&sql.includes(';')){await engine.exec(sql);return {rows:[]};}return engine.query(sql,args);}};
+  const command=(type,payload)=>({id:crypto.randomUUID(),type,payload});
+  try{
+    await migratePostgres(db);await db.query("UPDATE nexo_workspace SET state=state-'notes'");assert.deepEqual((await readPostgres(db)).state.notes,[]);
+    const note=command('note',{title:'Nota PG',body:'Texto salvo no banco'});await executePostgres(db,note,'owner');
+    assert.equal((await readPostgres(db)).state.notes[0].body,note.payload.body);
+    await executePostgres(db,command('note',{id:note.id,title:'Editada',body:'Novo texto'}),'owner');assert.equal((await readPostgres(db)).state.notes[0].title,'Editada');
+    await assert.rejects(()=>executePostgres(db,command('note',{title:'x',body:'x'.repeat(10001)}),'owner'));
+    assert.equal(JSON.stringify((await db.query('SELECT data FROM nexo_audit')).rows).includes('Novo texto'),false);
+    const remove=command('deleteNote',{id:note.id});await executePostgres(db,remove,'owner');const removed=await executePostgres(db,remove,'owner');assert.equal(removed.revision,3);assert.deepEqual((await readPostgres(db)).state.notes,[]);
+  }finally{await engine.close();}
+});
 test('PostgreSQL migrations, atomic commands, replay, audit and rollback',async()=>{
   const engine=new PGlite();
   const db={query:async(sql,args)=>{if(!args&&sql.includes(';')){await engine.exec(sql);return {rows:[]};}return engine.query(sql,args);}};
